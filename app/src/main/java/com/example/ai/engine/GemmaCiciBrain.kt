@@ -382,7 +382,13 @@ object GemmaCiciBrain {
         // 2. UPDATE / RALAT TRANSAKSI ("ralat telur tadi jadi 25rb", "telur tadi bukan 28 ribu tapi 25 ribu")
         val isUpdate = lower.contains("ralat") || lower.contains("bukan") || lower.contains("ganti harga") || lower.contains("salah harga")
         if (isUpdate && !isCancellation) {
-            val newAmount = extractAmountFromIndonesian(prompt)
+            val updateTargetText = when {
+                lower.contains(" tapi ") -> prompt.substring(lower.indexOf(" tapi ") + 6)
+                lower.contains(" jadi ") -> prompt.substring(lower.indexOf(" jadi ") + 6)
+                lower.contains(" menjadi ") -> prompt.substring(lower.indexOf(" menjadi ") + 9)
+                else -> prompt
+            }
+            val newAmount = extractAmountFromIndonesian(updateTargetText) ?: extractAmountFromIndonesian(prompt)
             if (newAmount != null && newAmount > 0L) {
                 val recentTx = state.allTransactions.take(8)
                 val matchedTx = recentTx.find { tx ->
@@ -405,6 +411,11 @@ object GemmaCiciBrain {
             }
         }
 
+        // Wishlist / Daftar Belanja detection
+        val isWishlist = lower.contains("daftar belanja") || lower.contains("wishlist") ||
+            lower.contains("di belanjaan") || lower.contains("ke belanjaan") ||
+            lower.contains("catat di belanja") || lower.contains("ingatkan beli")
+
         // 3. MULTI-ITEM / SINGLE-ITEM EXPENSE OR INCOME ADDITION
         // e.g.: "beli beras 5 kilo harganya 72 ribu sama minyak goreng 2 liter 34 ribu"
         val isIncome = lower.contains("gaji") || lower.contains("nafkah") || lower.contains("bonus") || lower.contains("terima uang") || lower.contains("dapat uang") || lower.contains("pemasukan")
@@ -412,7 +423,7 @@ object GemmaCiciBrain {
             lower.contains("jajan") || lower.contains("belanja") || lower.contains("catat") ||
             lower.contains("tadi") || lower.contains("masukin") || lower.contains("masukkan")
 
-        if ((isExpense || isIncome) && !isCancellation && !isUpdate) {
+        if ((isExpense || isIncome) && !isCancellation && !isUpdate && !isWishlist) {
             val extractedItems = extractMultiItems(prompt)
             if (extractedItems.isNotEmpty()) {
                 val defaultWallet = detectWalletSource(lower)
@@ -477,15 +488,15 @@ object GemmaCiciBrain {
             }
         }
 
-        // 4. DAFTAR BELANJA / WISHLIST ("catat di daftar belanja", "masukkan ke belanjaan")
-        if (lower.contains("daftar belanja") || lower.contains("wishlist") || lower.contains("catat di belanja") || lower.contains("ingatkan beli")) {
+        // 4. DAFTAR BELANJA / WISHLIST ("catat di daftar belanja", "masukkan ke belanjaan", "catat minyak goreng di belanjaan")
+        if (isWishlist && !isCancellation && !isUpdate) {
             val cleanedItem = prompt
-                .replace(Regex("(?i)catat di (?:daftar )?belanjaan?"), "")
-                .replace(Regex("(?i)masukkan ke (?:daftar )?belanjaan?"), "")
-                .replace(Regex("(?i)tambah(?:kan)? ke (?:daftar )?belanjaan?"), "")
-                .replace(Regex("(?i)daftar belanja"), "")
+                .replace(Regex("(?i)catat\\s+(?:di\\s+)?"), "")
+                .replace(Regex("(?i)masukkan\\s+(?:ke\\s+)?"), "")
+                .replace(Regex("(?i)tambah(?:kan)?\\s+(?:ke\\s+)?"), "")
+                .replace(Regex("(?i)(?:di|ke)?\\s*(?:daftar\\s+)?belanjaan?"), "")
                 .replace(Regex("(?i)wishlist"), "")
-                .replace(Regex("(?i)tolong catat"), "")
+                .replace(Regex("(?i)tolong"), "")
                 .replace(Regex("(?i)cici"), "")
                 .trim()
                 .ifBlank { "Barang Belanjaan" }
@@ -696,7 +707,7 @@ object GemmaCiciBrain {
         if (lower.contains("cepek")) return 100000L
 
         // Match patterns like "10 ribu", "15 rb", "20k", "25 rebu", "50.000", "50000"
-        val regexK = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:ribu|rb|rebu|k)", Pattern.CASE_INSENSITIVE)
+        val regexK = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:ribu|rb|rebu|k(?![a-zA-Z]))", Pattern.CASE_INSENSITIVE)
         val matcherK = regexK.matcher(lower)
         if (matcherK.find()) {
             val numStr = matcherK.group(1)?.replace(",", ".") ?: "0"

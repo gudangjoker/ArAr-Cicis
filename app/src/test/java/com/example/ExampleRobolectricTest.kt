@@ -56,7 +56,7 @@ class ExampleRobolectricTest {
 
     val action = response.structuredAction
     org.junit.Assert.assertNotNull(action)
-    assertEquals("ADD_TRANSACTION", action?.action)
+    assertEquals("ADD_EXPENSE", action?.action)
     assertEquals(10_000L, action?.amount)
     assertEquals("Belanja Dapur & Sayur", action?.category)
     assertEquals("Dompet Tunai", action?.walletSource)
