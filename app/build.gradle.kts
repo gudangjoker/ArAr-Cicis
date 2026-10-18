@@ -47,13 +47,6 @@ android {
     debug { signingConfig = signingConfigs.getByName("debug") }
   }
 
-  applicationVariants.all {
-    outputs.all {
-      val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
-      output?.outputFileName = "ArAr Cicis v${defaultConfig.versionName}.apk"
-    }
-  }
-
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
