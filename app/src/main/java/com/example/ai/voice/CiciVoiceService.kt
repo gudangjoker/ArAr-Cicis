@@ -334,17 +334,20 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private fun initSpeechRecognizer() {
         try {
-            if (SpeechRecognizer.isRecognitionAvailable(applicationContext)) {
-                val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-                mainHandler.post {
-                    try {
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            mainHandler.post {
+                try {
+                    if (SpeechRecognizer.isRecognitionAvailable(this)) {
                         speechRecognizer?.destroy()
-                        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(applicationContext).apply {
+                        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
                             setRecognitionListener(this@CiciVoiceService)
                         }
-                    } catch (e: Throwable) {
-                        Log.e(TAG, "Failed to create SpeechRecognizer on main thread: ${e.message}")
+                        Log.d(TAG, "SpeechRecognizer initialized successfully")
+                    } else {
+                        Log.w(TAG, "SpeechRecognizer not available on this device")
                     }
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Failed to create SpeechRecognizer on main thread: ${e.message}")
                 }
             }
         } catch (t: Throwable) {
@@ -360,7 +363,18 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             mainHandler.post {
                 try {
                     if (speechRecognizer == null) {
-                        initSpeechRecognizer()
+                        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+                            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                                setRecognitionListener(this@CiciVoiceService)
+                            }
+                        }
+                    }
+
+                    val recognizer = speechRecognizer
+                    if (recognizer == null) {
+                        Log.w(TAG, "SpeechRecognizer is null, cannot start listening")
+                        CiciVoiceBridge.updateListening(false)
+                        return@post
                     }
 
                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -372,7 +386,7 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
                         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                     }
 
-                    speechRecognizer?.startListening(intent)
+                    recognizer.startListening(intent)
                     CiciVoiceBridge.updateListening(true)
                     updateNotification("Si Cici Mendengarkan... 🎙️", "Bicara sekarang, Cici sedang mendengarkan...")
                 } catch (e: Throwable) {

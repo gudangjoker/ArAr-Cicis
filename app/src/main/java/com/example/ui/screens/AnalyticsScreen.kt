@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Card
@@ -68,6 +69,7 @@ private val ChartPalette = listOf(
 @Composable
 fun AnalyticsScreen(
     uiState: DashboardUiState,
+    onShareRekapToWhatsApp: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val totalExpense = uiState.thisMonthExpense
@@ -327,6 +329,72 @@ fun AnalyticsScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // 4. Bagikan Rekap Kas ke Pasangan / WhatsApp
+        item {
+            Card(
+                onClick = onShareRekapToWhatsApp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("share_rekap_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = GreenBudgetSafe.copy(alpha = 0.12f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = GreenBudgetSafe,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                text = "Kirim Rekap Kas ke Pasangan 📲",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Format teks rapi via WhatsApp (saldo, belanja bulan ini, amplop & tagihan)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Bagikan",
+                        tint = GreenBudgetSafe,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

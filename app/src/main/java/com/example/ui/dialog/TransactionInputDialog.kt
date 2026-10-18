@@ -50,7 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.DefaultExpenseCategories
+import com.example.data.entity.BudgetCategoryEntity
 import com.example.data.model.DefaultIncomeCategories
 import com.example.data.model.TransactionTypes
 import com.example.data.model.WalletSources
@@ -62,6 +62,7 @@ import com.example.util.MathExpressionEvaluator
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TransactionInputDialog(
+    budgetCategories: List<BudgetCategoryEntity> = emptyList(),
     onDismissRequest: () -> Unit,
     onSaveTransaction: (type: String, amountExpression: String, category: String, wallet: String, note: String) -> Unit,
     modifier: Modifier = Modifier
@@ -71,7 +72,11 @@ fun TransactionInputDialog(
     var transactionType by remember { mutableStateOf(TransactionTypes.EXPENSE) }
     var expressionInput by remember { mutableStateOf("") }
     var selectedWallet by remember { mutableStateOf(WalletSources.CASH) }
-    var selectedCategory by remember { mutableStateOf(DefaultExpenseCategories.DAPUR) }
+    var selectedCategory by remember {
+        mutableStateOf(budgetCategories.firstOrNull()?.categoryName ?: "Belanja")
+    }
+    var isCustomCategory by remember { mutableStateOf(budgetCategories.isEmpty()) }
+    var customCategoryText by remember { mutableStateOf("") }
     var noteInput by remember { mutableStateOf("") }
 
     // Evaluated amount live calculation
@@ -133,7 +138,8 @@ fun TransactionInputDialog(
                 Surface(
                     onClick = {
                         transactionType = TransactionTypes.EXPENSE
-                        selectedCategory = DefaultExpenseCategories.DAPUR
+                        selectedCategory = budgetCategories.firstOrNull()?.categoryName ?: "Belanja"
+                        isCustomCategory = budgetCategories.isEmpty()
                     },
                     modifier = Modifier
                         .weight(1f)
@@ -349,26 +355,63 @@ fun TransactionInputDialog(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
-                val availableCategories = if (transactionType == TransactionTypes.EXPENSE) {
-                    DefaultExpenseCategories.ALL
-                } else {
-                    DefaultIncomeCategories.ALL
-                }
+                if (transactionType == TransactionTypes.EXPENSE) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        budgetCategories.forEach { cat ->
+                            val isSelected = !isCustomCategory && selectedCategory == cat.categoryName
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedCategory = cat.categoryName
+                                    isCustomCategory = false
+                                },
+                                label = { Text("${cat.iconEmoji} ${cat.categoryName}", fontSize = 12.sp) },
+                                modifier = Modifier.testTag("category_chip_${cat.categoryName}")
+                            )
+                        }
 
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    availableCategories.forEach { category ->
-                        val isSelected = selectedCategory == category
-                        val emoji = DefaultExpenseCategories.getIconEmoji(category)
+                        // Chip for "+ Pos Baru / Lainnya"
                         FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedCategory = category },
-                            label = { Text("$emoji $category", fontSize = 12.sp) },
-                            modifier = Modifier.testTag("category_chip_$category")
+                            selected = isCustomCategory,
+                            onClick = { isCustomCategory = true },
+                            label = { Text("✍️ + Pos Baru / Lainnya", fontSize = 12.sp) },
+                            modifier = Modifier.testTag("category_chip_custom")
                         )
+                    }
+
+                    if (isCustomCategory || budgetCategories.isEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = customCategoryText,
+                            onValueChange = { customCategoryText = it },
+                            label = { Text("Nama Pos Belanja Baru") },
+                            placeholder = { Text("Ketik nama pos belanja (misal: Uang Jajan, Bensin, dll)") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("custom_category_input")
+                        )
+                    }
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        DefaultIncomeCategories.ALL.forEach { incomeCat ->
+                            val isSelected = selectedCategory == incomeCat
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedCategory = incomeCat },
+                                label = { Text(incomeCat, fontSize = 12.sp) },
+                                modifier = Modifier.testTag("income_chip_$incomeCat")
+                            )
+                        }
                     }
                 }
             }
@@ -388,13 +431,19 @@ fun TransactionInputDialog(
             )
 
             // Submit Button
+            val finalCategory = if (transactionType == TransactionTypes.EXPENSE && (isCustomCategory || budgetCategories.isEmpty())) {
+                customCategoryText.trim().ifBlank { selectedCategory.ifBlank { "Belanja" } }
+            } else {
+                selectedCategory.ifBlank { "Lainnya" }
+            }
+
             Button(
                 onClick = {
                     if (evaluatedAmount > 0) {
                         onSaveTransaction(
                             transactionType,
                             expressionInput,
-                            selectedCategory,
+                            finalCategory,
                             selectedWallet,
                             noteInput
                         )

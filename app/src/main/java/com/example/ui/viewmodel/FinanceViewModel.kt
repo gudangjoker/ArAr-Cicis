@@ -253,37 +253,67 @@ class FinanceViewModel(
 
     // === BUDGET CATEGORY ACTIONS ===
 
-    fun setBudgetLimit(categoryName: String, newLimitInput: String, iconEmoji: String = "💰") {
+    fun saveBudgetCategory(
+        originalCategoryName: String?,
+        newCategoryName: String,
+        limitInput: String,
+        iconEmoji: String = "💰"
+    ) {
         viewModelScope.launch {
-            val limit = parseMathExpression(newLimitInput)
-            if (limit <= 0) {
-                _userMessage.value = "Batas anggaran harus lebih dari Rp 0"
+            val cleanName = newCategoryName.trim()
+            if (cleanName.isBlank()) {
+                _userMessage.value = "Nama pos anggaran tidak boleh kosong"
                 return@launch
             }
 
-            val existing = uiState.value.budgetCategories.find { it.categoryName == categoryName }
+            val limit = parseMathExpression(limitInput).coerceAtLeast(0L)
+
+            val existing = if (!originalCategoryName.isNullOrBlank()) {
+                uiState.value.budgetCategories.find { it.categoryName.equals(originalCategoryName, ignoreCase = true) }
+            } else {
+                uiState.value.budgetCategories.find { it.categoryName.equals(cleanName, ignoreCase = true) }
+            }
+
             if (existing != null) {
+                val oldName = existing.categoryName
                 repository.updateBudgetCategory(
-                    existing.copy(monthlyLimit = limit, iconEmoji = iconEmoji)
+                    existing.copy(categoryName = cleanName, monthlyLimit = limit, iconEmoji = iconEmoji)
                 )
-                _userMessage.value = "Batas anggaran '$categoryName' diperbarui!"
+                if (!oldName.equals(cleanName, ignoreCase = true)) {
+                    repository.updateTransactionCategory(oldName, cleanName)
+                }
+                _userMessage.value = "Pos anggaran '$cleanName' berhasil diperbarui!"
             } else {
                 repository.insertBudgetCategory(
                     BudgetCategoryEntity(
-                        categoryName = categoryName,
+                        categoryName = cleanName,
                         monthlyLimit = limit,
                         iconEmoji = iconEmoji
                     )
                 )
-                _userMessage.value = "Pos anggaran baru berhasil ditambahkan!"
+                _userMessage.value = "Pos anggaran baru '$cleanName' berhasil dibuat!"
             }
         }
+    }
+
+    fun setBudgetLimit(categoryName: String, newLimitInput: String, iconEmoji: String = "💰") {
+        saveBudgetCategory(categoryName, categoryName, newLimitInput, iconEmoji)
     }
 
     fun deleteBudgetCategory(category: BudgetCategoryEntity) {
         viewModelScope.launch {
             repository.deleteBudgetCategory(category)
-            _userMessage.value = "Pos anggaran '${category.categoryName}' dihapus"
+            _userMessage.value = "Pos anggaran '${category.categoryName}' berhasil dihapus"
+        }
+    }
+
+    fun deleteBudgetCategoryByName(categoryName: String) {
+        viewModelScope.launch {
+            val target = uiState.value.budgetCategories.find { it.categoryName.equals(categoryName, ignoreCase = true) }
+            if (target != null) {
+                repository.deleteBudgetCategory(target)
+                _userMessage.value = "Pos anggaran '$categoryName' berhasil dihapus"
+            }
         }
     }
 

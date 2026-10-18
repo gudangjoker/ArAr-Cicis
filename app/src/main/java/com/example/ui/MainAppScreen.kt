@@ -272,8 +272,7 @@ fun MainAppScreen(
                         budgetToEdit = Triple(cat, limit, emoji)
                     },
                     onNavigateToEnvelopes = { selectedTabIndex = 1 },
-                    onNavigateToSiCici = { selectedTabIndex = 2 },
-                    onShareRekapToWhatsApp = shareRekapToWhatsApp
+                    onNavigateToSiCici = { selectedTabIndex = 2 }
                 )
                 1 -> BudgetEnvelopeScreen(
                     uiState = uiState,
@@ -281,8 +280,9 @@ fun MainAppScreen(
                         budgetToEdit = Triple(cat, limit, emoji)
                     },
                     onAddNewCategory = {
-                        budgetToEdit = Triple("Pos Belanja Baru", 500_000L, "💰")
-                    }
+                        budgetToEdit = Triple("", 0L, "💰")
+                    },
+                    onShareRekapToWhatsApp = shareRekapToWhatsApp
                 )
                 2 -> SiCiciChatScreen(
                     viewModel = viewModel,
@@ -355,6 +355,7 @@ fun MainAppScreen(
     // Modal Bottom Sheet: Quick Transaction Input
     if (showTransactionDialog) {
         TransactionInputDialog(
+            budgetCategories = uiState.budgetCategories,
             onDismissRequest = { showTransactionDialog = false },
             onSaveTransaction = { type, amountExp, category, wallet, note ->
                 viewModel.addTransaction(
@@ -371,13 +372,22 @@ fun MainAppScreen(
     // Dialog: Edit / Add Budget Limit
     budgetToEdit?.let { (category, currentLimit, emoji) ->
         EditBudgetDialog(
-            categoryName = category,
+            initialCategoryName = category,
             currentLimit = currentLimit,
-            iconEmoji = emoji,
+            initialIconEmoji = emoji,
+            isNewCategory = category.isBlank(),
             onDismissRequest = { budgetToEdit = null },
-            onSaveLimit = { newLimitExp ->
-                viewModel.setBudgetLimit(category, newLimitExp, emoji)
-            }
+            onSaveCategory = { newName, newLimitExp, newEmoji ->
+                viewModel.saveBudgetCategory(
+                    originalCategoryName = category.ifBlank { null },
+                    newCategoryName = newName,
+                    limitInput = newLimitExp,
+                    iconEmoji = newEmoji
+                )
+            },
+            onDeleteCategory = if (category.isNotBlank()) {
+                { viewModel.deleteBudgetCategoryByName(category) }
+            } else null
         )
     }
 

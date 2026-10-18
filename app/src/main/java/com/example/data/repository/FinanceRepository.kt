@@ -93,6 +93,11 @@ class FinanceRepository(private val dao: FinanceDao) {
             dao.deleteTransaction(transaction)
         }
 
+    suspend fun updateTransactionCategory(oldCategory: String, newCategory: String) =
+        withContext(Dispatchers.IO) {
+            dao.updateTransactionCategory(oldCategory, newCategory)
+        }
+
     suspend fun insertBudgetCategory(category: BudgetCategoryEntity): Long =
         withContext(Dispatchers.IO) {
             dao.insertBudgetCategory(category)

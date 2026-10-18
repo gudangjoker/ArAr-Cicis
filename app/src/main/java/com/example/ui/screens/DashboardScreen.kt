@@ -52,7 +52,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.entity.TransactionEntity
-import com.example.data.model.DefaultExpenseCategories
 import com.example.data.model.WalletSources
 import com.example.ui.components.BudgetEnvelopeCard
 import com.example.ui.components.TransactionCard
@@ -74,7 +73,6 @@ fun DashboardScreen(
     onEditBudgetLimit: (categoryName: String, currentLimit: Long, iconEmoji: String) -> Unit,
     onNavigateToEnvelopes: () -> Unit,
     onNavigateToSiCici: () -> Unit = {},
-    onShareRekapToWhatsApp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val now = DateTimeUtils.getCurrentJakartaTimeMillis()
@@ -392,78 +390,6 @@ fun DashboardScreen(
             }
         }
 
-        // 2B. Quick Action: Bagikan Rekap Kas ke Pasangan / WhatsApp
-        item {
-            Card(
-                onClick = onShareRekapToWhatsApp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("share_rekap_card"),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = GreenBudgetSafe.copy(alpha = 0.12f)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = GreenBudgetSafe,
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Share,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text(
-                                text = "Kirim Rekap Kas ke Pasangan 📲",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Format teks rapi via WhatsApp (saldo, belanja hari ini, amplop & tagihan)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = GreenBudgetSafe
-                    ) {
-                        Text(
-                            text = "Kirim",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
-                    }
-                }
-            }
-        }
-
         // 3. Pos Amplop Anggaran Belanja (Top Envelopes Preview)
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -589,9 +515,12 @@ fun DashboardScreen(
                         label = { Text("Semua Pos", fontSize = 11.sp) }
                     )
 
-                    DefaultExpenseCategories.ALL.forEach { cat ->
+                    val distinctCategories = uiState.budgetCategories
+                        .map { it.categoryName to it.iconEmoji }
+                        .distinctBy { it.first }
+
+                    distinctCategories.forEach { (cat, emoji) ->
                         val isSelected = uiState.selectedCategory == cat
-                        val emoji = DefaultExpenseCategories.getIconEmoji(cat)
                         FilterChip(
                             selected = isSelected,
                             onClick = { onCategoryFilterChange(if (isSelected) null else cat) },

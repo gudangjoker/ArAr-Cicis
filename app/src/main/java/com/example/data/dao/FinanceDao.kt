@@ -29,6 +29,9 @@ interface FinanceDao {
     @Delete
     suspend fun deleteTransaction(transaction: TransactionEntity)
 
+    @Query("UPDATE transactions SET category = :newCategory WHERE category = :oldCategory")
+    suspend fun updateTransactionCategory(oldCategory: String, newCategory: String)
+
     @Query("SELECT * FROM transactions ORDER BY dateTimestamp DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
 

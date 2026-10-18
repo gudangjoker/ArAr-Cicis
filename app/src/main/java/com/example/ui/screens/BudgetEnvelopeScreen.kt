@@ -57,6 +57,7 @@ fun BudgetEnvelopeScreen(
     uiState: DashboardUiState,
     onEditBudgetLimit: (categoryName: String, currentLimit: Long, iconEmoji: String) -> Unit,
     onAddNewCategory: () -> Unit,
+    onShareRekapToWhatsApp: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Pos Amplop, 1 = Grafik & Analisis
@@ -99,7 +100,10 @@ fun BudgetEnvelopeScreen(
         }
 
         if (selectedTab == 1) {
-            AnalyticsScreen(uiState = uiState)
+            AnalyticsScreen(
+                uiState = uiState,
+                onShareRekapToWhatsApp = onShareRekapToWhatsApp
+            )
         } else {
             val totalBudget = uiState.budgetEnvelopes.sumOf { it.monthlyLimit }
             val totalSpent = uiState.budgetEnvelopes.sumOf { it.spentAmount }
@@ -276,14 +280,50 @@ fun BudgetEnvelopeScreen(
             }
         }
 
-        // 5. Envelope Items List
-        items(uiState.budgetEnvelopes, key = { it.id }) { env ->
-            BudgetEnvelopeCard(
-                envelope = env,
-                onEditLimit = {
-                    onEditBudgetLimit(env.categoryName, env.monthlyLimit, env.iconEmoji)
+        // 5. Envelope Items List or Empty State
+        if (uiState.budgetEnvelopes.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("empty_envelopes_card"),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(text = "✉️", fontSize = 38.sp)
+                        Text(
+                            text = "Belum Ada Pos Amplop",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Pos anggaran belanja tidak disediakan kaku oleh sistem. Bunda bebas membuat sendiri pos anggaran sesuai kebutuhan rumah tangga (contoh: Belanja Dapur, Uang Sekolah, Bensin, Skincare, dll). Ketuk tombol 'Tambah Pos Amplop Baru' di atas untuk membuat pos pertama Bunda!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
-            )
+            }
+        } else {
+            items(uiState.budgetEnvelopes, key = { it.id }) { env ->
+                BudgetEnvelopeCard(
+                    envelope = env,
+                    onEditLimit = {
+                        onEditBudgetLimit(env.categoryName, env.monthlyLimit, env.iconEmoji)
+                    }
+                )
+            }
         }
     }
 }

@@ -148,19 +148,52 @@ fun SiCiciChatScreen(
         }
     }
 
+    // Direct in-app voice input launcher (safe, instantaneous, no background service crash)
+    val speechInputLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val spokenText = result.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) {
+                inputPrompt = spokenText
+                viewModel.askSiCici(spokenText) { responseSpeech ->
+                    if (viewModel.isTtsVoiceEnabled.value) {
+                        try {
+                            voiceManager.speak(responseSpeech)
+                        } catch (t: Throwable) {
+                            Log.e("SiCiciChatScreen", "TTS error: ${t.message}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    val launchInAppSpeechRecognizer = {
+        try {
+            val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "id-ID")
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id-ID")
+                putExtra(android.speech.RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "id-ID")
+                putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Bicara ke Si Cici (contoh: 'Beli beras 72rb')...")
+            }
+            speechInputLauncher.launch(intent)
+        } catch (e: Exception) {
+            Log.e("SiCiciChatScreen", "In-app speech error: ${e.message}", e)
+            Toast.makeText(context, "Layanan pengenal suara Google tidak tersedia di perangkat ini. Silakan ketik langsung di kolom pesan.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     // Audio & Notification permissions launcher
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
         val audioGranted = perms[Manifest.permission.RECORD_AUDIO] == true
         if (audioGranted) {
-            try {
-                voiceManager.startSingleListen()
-            } catch (t: Throwable) {
-                Toast.makeText(context, "Asisten suara siap digunakan di aplikasi", Toast.LENGTH_SHORT).show()
-            }
+            launchInAppSpeechRecognizer()
         } else {
-            Toast.makeText(context, "Izin mikrofon diperlukan untuk perintah suara Si Cici", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Izin mikrofon diperlukan untuk mendengarkan suara Bunda", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -184,16 +217,11 @@ fun SiCiciChatScreen(
     }
 
     val startVoiceInput = {
-        requestPermissionsIfNeeded {
-            try {
-                if (isListening) {
-                    voiceManager.stopStandby()
-                } else {
-                    voiceManager.startSingleListen()
-                }
-            } catch (t: Throwable) {
-                Toast.makeText(context, "Gagal memulai mikrofon: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
+        val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (hasMic) {
+            launchInAppSpeechRecognizer()
+        } else {
+            permissionsLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
         }
     }
 
