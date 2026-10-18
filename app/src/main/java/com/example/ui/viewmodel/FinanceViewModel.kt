@@ -751,6 +751,13 @@ class FinanceViewModel(
         modelDownloadManager.deleteModel(model)
     }
 
+    fun getCustomApiKey(): String = modelDownloadManager.getCustomApiKey()
+
+    fun saveCustomApiKey(key: String) {
+        modelDownloadManager.setCustomApiKey(key)
+        _userMessage.value = if (key.isNotBlank()) "Kunci API berhasil disimpan!" else "Kunci API dihapus"
+    }
+
     fun askSiCici(prompt: String, onSpeak: ((String) -> Unit)? = null) {
         val cleanPrompt = prompt.trim()
         if (cleanPrompt.isBlank()) return
@@ -762,10 +769,12 @@ class FinanceViewModel(
 
         viewModelScope.launch {
             try {
-                val apiKey = try {
-                    BuildConfig.GEMINI_API_KEY
-                } catch (t: Throwable) {
-                    ""
+                val apiKey = modelDownloadManager.getCustomApiKey().ifBlank {
+                    try {
+                        BuildConfig.GEMINI_API_KEY
+                    } catch (t: Throwable) {
+                        ""
+                    }
                 }
 
                 val currentModel = modelDownloadManager.selectedModel.value

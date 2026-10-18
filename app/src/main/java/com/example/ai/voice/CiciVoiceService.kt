@@ -149,6 +149,8 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         super.onCreate()
         Log.d(TAG, "CiciVoiceService created")
         createNotificationChannel()
+        // Immediately start foreground to satisfy Android OS 5-second contract!
+        startForegroundWithNotification("Si Cici Siap Mendengarkan... 🎙️", "Katakan belanjaan atau catatan kas Bunda")
         initTextToSpeech()
         initSpeechRecognizer()
         CiciVoiceBridge.updateServiceRunning(true)
@@ -158,31 +160,40 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         val action = intent?.action
         Log.d(TAG, "onStartCommand action: $action")
 
-        when (action) {
-            ACTION_STOP_SERVICE -> {
-                Log.d(TAG, "Received ACTION_STOP_SERVICE. Cleaning up and stopping self.")
-                stopVoiceAndCleanup()
-                stopSelf()
-                return START_NOT_STICKY
-            }
+        try {
+            when (action) {
+                ACTION_STOP_SERVICE -> {
+                    Log.d(TAG, "Received ACTION_STOP_SERVICE. Cleaning up and stopping self.")
+                    stopVoiceAndCleanup()
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
 
-            ACTION_START_STANDBY -> {
-                startForegroundWithNotification("Si Cici Siap Mendengarkan... 🎙️", "Katakan belanjaan atau catatan kas Bunda")
-                CiciVoiceBridge.updateStandby(true)
-                speakInternal("Halo Bun! Cici siap bantu sambil Bunda belanja.")
-            }
+                ACTION_START_STANDBY -> {
+                    updateNotification("Si Cici Siap Mendengarkan... 🎙️", "Katakan belanjaan atau catatan kas Bunda")
+                    CiciVoiceBridge.updateStandby(true)
+                    speakInternal("Halo Bun! Cici siap bantu sambil Bunda belanja.")
+                }
 
-            ACTION_START_SINGLE_LISTEN -> {
-                startForegroundWithNotification("Si Cici Mendengarkan...", "Sebutkan perintah atau belanjaan Anda")
-                startListeningInternal()
-            }
+                ACTION_START_SINGLE_LISTEN -> {
+                    updateNotification("Si Cici Mendengarkan...", "Sebutkan perintah atau belanjaan Anda")
+                    startListeningInternal()
+                }
 
-            ACTION_SPEAK -> {
-                val textToSpeak = intent.getStringExtra(EXTRA_SPEAK_TEXT)
-                if (!textToSpeak.isNullOrBlank()) {
-                    speakInternal(textToSpeak)
+                ACTION_SPEAK -> {
+                    val textToSpeak = intent.getStringExtra(EXTRA_SPEAK_TEXT)
+                    if (!textToSpeak.isNullOrBlank()) {
+                        speakInternal(textToSpeak)
+                    }
+                }
+
+                else -> {
+                    updateNotification("Si Cici Siap Mendengarkan... 🎙️", "Katakan belanjaan atau catatan kas Bunda")
+                    CiciVoiceBridge.updateStandby(true)
                 }
             }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error in onStartCommand: ${e.message}", e)
         }
 
         return START_NOT_STICKY
@@ -204,8 +215,8 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     private fun startForegroundWithNotification(title: String, content: String) {
-        val notification = buildForegroundNotification(title, content)
         try {
+            val notification = buildForegroundNotification(title, content)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceCompat.startForeground(
                     this,
@@ -216,8 +227,14 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Failed to start foreground service: ${e.message}", e)
+            try {
+                val fallbackNotification = buildForegroundNotification(title, content)
+                startForeground(NOTIFICATION_ID, fallbackNotification)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Fallback startForeground also failed: ${t.message}", t)
+            }
         }
     }
 
@@ -243,8 +260,14 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val smallIconRes = try {
+            R.drawable.ic_stat_cici_mic
+        } catch (t: Throwable) {
+            android.R.drawable.stat_notify_chat
+        }
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(smallIconRes)
             .setContentTitle(title)
             .setContentText(content)
             .setContentIntent(openAppPendingIntent)
@@ -310,14 +333,22 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     private fun initSpeechRecognizer() {
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            try {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-                    setRecognitionListener(this@CiciVoiceService)
+        try {
+            if (SpeechRecognizer.isRecognitionAvailable(applicationContext)) {
+                val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                mainHandler.post {
+                    try {
+                        speechRecognizer?.destroy()
+                        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(applicationContext).apply {
+                            setRecognitionListener(this@CiciVoiceService)
+                        }
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Failed to create SpeechRecognizer on main thread: ${e.message}")
+                    }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to create SpeechRecognizer: ${e.message}")
             }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Speech recognition check error: ${t.message}")
         }
     }
 
@@ -325,24 +356,32 @@ class CiciVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (CiciVoiceBridge.isSpeaking.value) return // Don't record while speaking
 
         try {
-            if (speechRecognizer == null) {
-                initSpeechRecognizer()
-            }
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            mainHandler.post {
+                try {
+                    if (speechRecognizer == null) {
+                        initSpeechRecognizer()
+                    }
 
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID")
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id-ID")
-                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "id-ID")
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            }
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID")
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id-ID")
+                        putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "id-ID")
+                        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                    }
 
-            speechRecognizer?.startListening(intent)
-            CiciVoiceBridge.updateListening(true)
-            updateNotification("Si Cici Mendengarkan... 🎙️", "Bicara sekarang, Cici sedang mendengarkan...")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error starting speech recognition: ${e.message}")
+                    speechRecognizer?.startListening(intent)
+                    CiciVoiceBridge.updateListening(true)
+                    updateNotification("Si Cici Mendengarkan... 🎙️", "Bicara sekarang, Cici sedang mendengarkan...")
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error starting speech recognition: ${e.message}")
+                    CiciVoiceBridge.updateListening(false)
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error dispatching startListening: ${e.message}")
             CiciVoiceBridge.updateListening(false)
         }
     }

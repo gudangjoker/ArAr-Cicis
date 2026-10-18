@@ -50,7 +50,16 @@ class VoiceAssistantManager(
      */
     fun startStandby() {
         Log.d(TAG, "Starting background standby voice service...")
-        CiciVoiceService.startStandby(context.applicationContext)
+        try {
+            CiciVoiceService.startStandby(context.applicationContext)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to start background standby service: ${e.message}", e)
+            try {
+                startSingleListen()
+            } catch (t: Throwable) {
+                Log.e(TAG, "In-app fallback listen error: ${t.message}")
+            }
+        }
     }
 
     /**
@@ -58,7 +67,11 @@ class VoiceAssistantManager(
      */
     fun stopStandby() {
         Log.d(TAG, "Stopping background voice service...")
-        CiciVoiceService.stopService(context.applicationContext)
+        try {
+            CiciVoiceService.stopService(context.applicationContext)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to stop standby service: ${e.message}", e)
+        }
     }
 
     fun toggleStandby() {
@@ -73,26 +86,40 @@ class VoiceAssistantManager(
      * One-shot listen for single sentence input.
      */
     fun startSingleListen() {
-        CiciVoiceService.startSingleListen(context.applicationContext)
+        try {
+            CiciVoiceService.startSingleListen(context.applicationContext)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to start single listen: ${e.message}", e)
+        }
     }
 
     /**
      * Speaks text using Text-to-Speech through the service.
      */
     fun speak(text: String) {
-        CiciVoiceService.speak(context.applicationContext, text)
+        try {
+            CiciVoiceService.speak(context.applicationContext, text)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to trigger speak: ${e.message}", e)
+        }
     }
 
     fun stopSpeaking() {
-        // Turning off service stops speech immediately
-        CiciVoiceService.stopService(context.applicationContext)
+        try {
+            CiciVoiceService.stopService(context.applicationContext)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to stop speaking: ${e.message}", e)
+        }
     }
 
     fun destroy() {
         eventJob?.cancel()
-        // If standby is not explicitly active, stop service
-        if (!isStandbyActive.value) {
-            CiciVoiceService.stopService(context.applicationContext)
+        try {
+            if (!isStandbyActive.value) {
+                CiciVoiceService.stopService(context.applicationContext)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error in destroy: ${e.message}")
         }
     }
 }

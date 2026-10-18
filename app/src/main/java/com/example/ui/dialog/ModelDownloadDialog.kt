@@ -76,6 +76,8 @@ fun ModelDownloadDialog(
 
     var showCustomUrlInput by remember { mutableStateOf(false) }
     var customDownloadUrl by remember { mutableStateOf("") }
+    var showApiKeyInput by remember { mutableStateOf(false) }
+    var apiKeyInput by remember { mutableStateOf(viewModel.getCustomApiKey()) }
 
     val availableStorageBytes = viewModel.modelDownloadManager.getAvailableStorageBytes()
     val availableStorageGb = if (availableStorageBytes > 0) {
@@ -460,6 +462,39 @@ fun ModelDownloadDialog(
                         )
                         Text(
                             text = "Gunakan jika Bunda memiliki mirror lokal di Wi-Fi rumah agar download jauh lebih cepat.",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Optional Cloud API Key Section
+                TextButton(
+                    onClick = { showApiKeyInput = !showApiKeyInput },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(
+                        text = if (showApiKeyInput) "Sembunyikan Pengaturan API Key Cloud" else "Pengaturan API Key Cloud Gemini (Opsional)",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                AnimatedVisibility(visible = showApiKeyInput) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(
+                            value = apiKeyInput,
+                            onValueChange = {
+                                apiKeyInput = it
+                                viewModel.saveCustomApiKey(it)
+                            },
+                            placeholder = { Text("AIzaSy...", fontSize = 11.sp) },
+                            label = { Text("Kunci API Gemini", fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Text(
+                            text = "Opsional: Jika diisi, Cici bisa terhubung ke model Gemini Cloud saat online. Jika kosong, Cici berjalan 100% lokal offline di HP Bunda.",
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

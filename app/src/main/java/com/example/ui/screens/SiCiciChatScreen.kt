@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -147,34 +148,63 @@ fun SiCiciChatScreen(
         }
     }
 
-    // Audio permission launcher
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            voiceManager.startSingleListen()
+    // Audio & Notification permissions launcher
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val audioGranted = perms[Manifest.permission.RECORD_AUDIO] == true
+        if (audioGranted) {
+            try {
+                voiceManager.startSingleListen()
+            } catch (t: Throwable) {
+                Toast.makeText(context, "Asisten suara siap digunakan di aplikasi", Toast.LENGTH_SHORT).show()
+            }
         } else {
             Toast.makeText(context, "Izin mikrofon diperlukan untuk perintah suara Si Cici", Toast.LENGTH_SHORT).show()
         }
     }
 
-    val startVoiceInput = {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            if (isListening) {
-                voiceManager.stopStandby()
-            } else {
-                voiceManager.startSingleListen()
-            }
+    val hasAudioPermission = {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    }
+
+    val requestPermissionsIfNeeded = { onGranted: () -> Unit ->
+        val permissionsToRequest = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val ungranted = permissionsToRequest.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (ungranted.isEmpty()) {
+            onGranted()
         } else {
-            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            permissionsLauncher.launch(ungranted.toTypedArray())
+        }
+    }
+
+    val startVoiceInput = {
+        requestPermissionsIfNeeded {
+            try {
+                if (isListening) {
+                    voiceManager.stopStandby()
+                } else {
+                    voiceManager.startSingleListen()
+                }
+            } catch (t: Throwable) {
+                Toast.makeText(context, "Gagal memulai mikrofon: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     val toggleStandbyMode = {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            voiceManager.toggleStandby()
-        } else {
-            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        requestPermissionsIfNeeded {
+            try {
+                voiceManager.toggleStandby()
+            } catch (t: Throwable) {
+                Log.e("SiCiciChatScreen", "Error toggling standby mode: ${t.message}", t)
+                Toast.makeText(context, "Mode suara dapat digunakan langsung di aplikasi", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

@@ -264,4 +264,12 @@ class ModelDownloadManager(private val context: Context) {
         val savedId = prefs.getString(KEY_SELECTED_MODEL_ID, null)
         return AVAILABLE_MODELS.find { it.id == savedId } ?: AVAILABLE_MODELS.first()
     }
+
+    fun getCustomApiKey(): String {
+        return prefs.getString("custom_api_key", "") ?: ""
+    }
+
+    fun setCustomApiKey(key: String) {
+        prefs.edit().putString("custom_api_key", key.trim()).apply()
+    }
 }

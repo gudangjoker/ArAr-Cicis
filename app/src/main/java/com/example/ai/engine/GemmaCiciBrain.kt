@@ -15,6 +15,7 @@ import com.example.data.model.WishlistCategories
 import com.example.ui.viewmodel.DashboardUiState
 import com.example.util.CurrencyFormatter
 import com.example.util.DateTimeUtils
+import com.example.util.MathExpressionEvaluator
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -572,7 +573,7 @@ object GemmaCiciBrain {
         } else if (isCheckBalance) {
             "Saat ini total saldo kas Bunda adalah ${CurrencyFormatter.formatRupiah(state.totalNetBalance)} ya Bun. Pengeluaran hari ini tercatat ${CurrencyFormatter.formatRupiah(state.todayExpense)}."
         } else {
-            "Halo Bunda! Cici asisten belanja ArAr Cicis siap bantu. Contoh perintah yang bisa Bunda sebutkan:\n• 'Beli beras 5 kilo 72rb sama minyak 34rb, sisa uang tinggal berapa?'\n• 'Eh rotinya kemahalan, gak jadi beli deh'\n• 'Ralat telur tadi bukan 28rb tapi 25rb'\n• 'Berapa sisa uang kas?'"
+            resolveConversationalResponse(prompt, lower, state)
         }
 
         return CiciResponse(
@@ -731,5 +732,312 @@ object GemmaCiciBrain {
         }
 
         return null
+    }
+
+    /**
+     * Comprehensive Natural Language Dialogue and Financial Reasoning Engine.
+     * Evaluates user intent dynamically with live financial context (zero repetitive stubs).
+     */
+    fun resolveConversationalResponse(prompt: String, lower: String, state: DashboardUiState): String {
+        // 1. Math / Arithmetic calculation question (e.g. "15rb tambah 35rb berapa", "72000 + 34000", "25rb kali 3")
+        val mathAnswer = evaluateArithmeticQuery(prompt, lower)
+        if (mathAnswer != null) return mathAnswer
+
+        // 2. Identity & Persona query ("siapa namamu?", "kamu siapa?", "nama kamu siapa?")
+        if (isIdentityQuery(lower)) {
+            return "Halo Bunda! Nama saya Cici (Si Cici), asisten belanja dan keuangan keluarga Bunda di aplikasi ArAr Cicis. 🌸\n\n" +
+                "Cici hadir untuk mendampingi Bunda saat berbelanja di pasar maupun minimarket, mencatat setiap rupiah pengeluaran kas secara otomatis, menjaga pos amplop anggaran agar tidak over-budget, dan menghitung sisa uang belanja secara teliti.\n\n" +
+                "Saat ini total saldo kas keluarga Bunda tercatat ${CurrencyFormatter.formatRupiah(state.totalNetBalance)}. Senang sekali bisa berkenalan dengan Bunda! Ada belanjaan atau rencana kas yang mau kita atur hari ini?"
+        }
+
+        // 3. Shopping readiness / companion ("bantu aku belanja ya", "temani belanja", "ayo kita belanja", "mau belanja nih")
+        if (isShoppingReadinessQuery(lower)) {
+            val kitchenEnv = state.budgetEnvelopes.find { it.categoryName.contains("Dapur", ignoreCase = true) }
+            val kitchenInfo = if (kitchenEnv != null) {
+                "• Kuota Amplop Dapur: Sisa ${CurrencyFormatter.formatRupiah(kitchenEnv.remainingAmount)} (Batas: ${CurrencyFormatter.formatRupiah(kitchenEnv.monthlyLimit)})\n"
+            } else ""
+
+            return "Siap dengan senang hati Bunda! Cici setia mendampingi Bunda belanja. 🛒✨\n\n" +
+                "Status Dompet Kas Bunda saat ini:\n" +
+                "• Sisa Saldo Kas Bersih: ${CurrencyFormatter.formatRupiah(state.totalNetBalance)}\n" +
+                kitchenInfo +
+                "• Belanja Hari Ini: ${CurrencyFormatter.formatRupiah(state.todayExpense)}\n\n" +
+                "Silakan sebutkan atau ketik saja belanjaan Bunda, misalnya:\n" +
+                "👉 'Beli beras 5 kilo 72rb sama minyak 34rb'\n" +
+                "👉 'Beli bayam 5rb dan tempe 8rb tunai'\n\n" +
+                "Nanti langsung otomatis Cici catat rapi ke pembukuan kas. Mau mulai dari belanjaan apa dulu nih Bun?"
+        }
+
+        // 4. Capabilities / Help ("kamu bisa apa", "bisa apa aja", "fitur apa", "cara pakai")
+        if (isCapabilitiesQuery(lower)) {
+            return "Cici adalah asisten belanja dan keuangan keluarga serbabisa untuk Bunda. Berikut hal-hal praktis yang bisa Cici lakukan:\n\n" +
+                "1. 🛒 **Catat Belanja Otomatis**: Ketik/sebutkan 'Beli beras 72rb dan minyak 34rb', Cici langsung catat keduanya sekaligus ke kas.\n" +
+                "2. 💰 **Cek Saldo Kas Eksak**: Tanya 'Sisa uang kas tinggal berapa?', Cici hitung eksak tanpa halusinasi matematika.\n" +
+                "3. ✏️ **Ralat Catatan**: 'Ralat telur tadi bukan 28rb tapi 25rb', catatan langsung diperbarui.\n" +
+                "4. ❌ **Batal Belanja**: 'Rotinya kemahalan, gak jadi beli deh', item langsung dihapus dari pembukuan kas.\n" +
+                "5. 📝 **Daftar Belanja (Wishlist)**: 'Catat wajan teflon di belanjaan', masuk ke daftar belanja Bunda.\n" +
+                "6. ⚡ **Tagihan Rutin**: 'Bayar tagihan listrik PLN', tagihan ditandai lunas dan tercatat di kas.\n" +
+                "7. 🧮 **Kalkulator Kas**: '15rb tambah 35rb berapa?', Cici hitung seketika.\n" +
+                "8. 📊 **Evaluasi Keuangan**: Tanya 'Pos mana yang paling boros?' atau 'Gimana kondisi keuangan bulan ini?'.\n" +
+                "9. 💡 **Tips Hemat Dapur**: Tanya 'Bagi tips hemat belanja dong'.\n" +
+                "10. 🎙️ **Hands-Free Suara**: Tekan ikon headphone di atas, lalu bicara bebas sambil dorong troli!"
+        }
+
+        // 5. Boros / Pengeluaran Terbesar ("pos mana yang paling boros?", "pengeluaran terbesar")
+        if (isBorosQuery(lower)) {
+            val sortedEnvelopes = state.budgetEnvelopes.sortedByDescending { it.spentAmount }
+            val top = sortedEnvelopes.firstOrNull()
+            return if (top != null && top.spentAmount > 0L) {
+                val isExceeded = top.isAlert || top.spentAmount > top.monthlyLimit
+                val statusText = if (isExceeded) {
+                    "Pos ini sudah melebihi batas anggaran ya Bun. Untuk sisa hari bulan ini, yuk kita rem dulu belanja di kategori ini!"
+                } else {
+                    "Pos ini masih berada dalam batas aman. Tetap teliti ya Bun!"
+                }
+                "Berdasarkan catatan kas bulan ini, pos pengeluaran terbesar Bunda ada di:\n\n" +
+                    "📌 **${top.categoryName}**\n" +
+                    "• Total Terpakai: ${CurrencyFormatter.formatRupiah(top.spentAmount)}\n" +
+                    "• Batas Bulanan: ${CurrencyFormatter.formatRupiah(top.monthlyLimit)}\n" +
+                    "• Sisa Kuota Pos: ${CurrencyFormatter.formatRupiah(top.remainingAmount)}\n\n" +
+                    statusText
+            } else {
+                "Belum ada catatan pengeluaran besar yang menonjol bulan ini ya Bun. Catatan kas masih sangat aman dan rapi!"
+            }
+        }
+
+        // 6. Today's Recap ("rekap belanja hari ini", "tadi belanja apa aja")
+        if (isTodayRecapQuery(lower)) {
+            val startOfDay = DateTimeUtils.getStartOfDay()
+            val endOfDay = DateTimeUtils.getEndOfDay()
+            val todayTxs = state.allTransactions.filter {
+                it.dateTimestamp in startOfDay..endOfDay && it.type == TransactionTypes.EXPENSE
+            }
+            return if (todayTxs.isNotEmpty()) {
+                val sb = java.lang.StringBuilder("📝 **Rekap Belanja Bunda Hari Ini**:\n\n")
+                todayTxs.forEachIndexed { i, tx ->
+                    sb.append("${i + 1}. ${tx.note.ifBlank { tx.category }}: ${CurrencyFormatter.formatRupiah(tx.amount)} (${tx.walletSource})\n")
+                }
+                sb.append("\n💰 **Total Pengeluaran Hari Ini**: ${CurrencyFormatter.formatRupiah(state.todayExpense)}\n")
+                sb.append("Sisa saldo kas Bunda: ${CurrencyFormatter.formatRupiah(state.totalNetBalance)}.")
+                sb.toString()
+            } else {
+                "Hari ini belum ada catatan pengeluaran yang dicatat ya Bun. Pengeluaran hari ini masih Rp 0. Sisa saldo kas Bunda saat ini: ${CurrencyFormatter.formatRupiah(state.totalNetBalance)}."
+            }
+        }
+
+        // 7. Unpaid Bills query ("tagihan belum dibayar", "cek tagihan")
+        if (isUnpaidBillsQuery(lower)) {
+            val currentMonth = DateTimeUtils.getCurrentMonthYearKey()
+            val unpaid = state.bills.filter { it.lastPaidMonthYear != currentMonth }
+            return if (unpaid.isNotEmpty()) {
+                val sb = java.lang.StringBuilder("⚡ **Daftar Tagihan Rutin yang Belum Lunas Bulan Ini**:\n\n")
+                var totalBills = 0L
+                unpaid.forEachIndexed { i, bill ->
+                    sb.append("${i + 1}. **${bill.title}** (Jatuh tempo tgl ${bill.dueDayOfMonth}): ~${CurrencyFormatter.formatRupiah(bill.estimatedAmount)}\n")
+                    totalBills += bill.estimatedAmount
+                }
+                sb.append("\n💡 Total estimasi tagihan: ${CurrencyFormatter.formatRupiah(totalBills)}.\n")
+                sb.append("Kalau sudah bayar, Bunda cukup sebutkan 'Bayar tagihan ${unpaid.first().title}' ya Bun!")
+                sb.toString()
+            } else {
+                "Alhamdulillah! Seluruh tagihan rutin bulan ini sudah tercatat lunas semua Bunda. Hebat sekali! 👏🎉"
+            }
+        }
+
+        // 8. Financial Health / Kondisi Keuangan ("kondisi keuangan", "keuangan kita", "apakah uangku cukup", "apakah kita boros")
+        if (isFinancialHealthQuery(lower)) {
+            val balance = state.totalNetBalance
+            val monthExpense = state.thisMonthExpense
+            val monthIncome = state.thisMonthIncome
+            val envelopes = state.budgetEnvelopes
+
+            val healthStatus = when {
+                balance <= 0 -> "🔴 Perlu Perhatian Khusus: Saldo kas saat ini berada di angka Rp 0 atau minus. Cici sarankan tunda dulu belanja non-pokok dan prioritaskan kebutuhan mendesak ya Bun."
+                monthExpense > monthIncome && monthIncome > 0 -> "🟡 Waspada: Pengeluaran bulan ini (${CurrencyFormatter.formatRupiah(monthExpense)}) telah melampaui pemasukan (${CurrencyFormatter.formatRupiah(monthIncome)}). Sebaiknya perketat pos belanja jajan & hiburan."
+                else -> "🟢 Sangat Sehat: Arus kas keluarga berjalan baik dan terkendali! Pengeluaran masih berada dalam batas wajar."
+            }
+
+            val overBudgetEnvelopes = envelopes.filter { it.isAlert || it.spentAmount > it.monthlyLimit }
+            val warningEnvelopes = envelopes.filter { it.isWarning }
+
+            val envelopeReport = java.lang.StringBuilder()
+            if (overBudgetEnvelopes.isNotEmpty()) {
+                envelopeReport.append("\n⚠️ Pos yang melebihi batas anggaran:\n")
+                overBudgetEnvelopes.forEach {
+                    envelopeReport.append("• ${it.categoryName}: Terpakai ${CurrencyFormatter.formatRupiah(it.spentAmount)} / Batas ${CurrencyFormatter.formatRupiah(it.monthlyLimit)}\n")
+                }
+            }
+            if (warningEnvelopes.isNotEmpty()) {
+                envelopeReport.append("\n⚡ Pos yang mendekati batas (waspada):\n")
+                warningEnvelopes.forEach {
+                    envelopeReport.append("• ${it.categoryName}: Sisa ${CurrencyFormatter.formatRupiah(it.remainingAmount)}\n")
+                }
+            }
+
+            return "📊 **Analisis Keuangan Keluarga Bulan Ini**:\n\n" +
+                "• Status Arus Kas: $healthStatus\n" +
+                "• Total Sisa Kas Bersih: ${CurrencyFormatter.formatRupiah(balance)}\n" +
+                "• Total Pemasukan: ${CurrencyFormatter.formatRupiah(monthIncome)}\n" +
+                "• Total Pengeluaran: ${CurrencyFormatter.formatRupiah(monthExpense)}\n" +
+                "• Pengeluaran Hari Ini: ${CurrencyFormatter.formatRupiah(state.todayExpense)}\n" +
+                envelopeReport.toString() + "\n" +
+                "Bunda hebat sudah rajin mencatat pembukuan keluarga! Tetap semangat hemat ya Bun. ❤️"
+        }
+
+        // 9. Greetings & Salutations ("halo", "hai", "selamat pagi", "assalamu'alaikum")
+        if (isGreetingQuery(lower)) {
+            val timeGreeting = when {
+                lower.contains("pagi") -> "Selamat pagi Bunda tersayang! ☀️"
+                lower.contains("siang") -> "Selamat siang Bunda! 🌤️"
+                lower.contains("sore") -> "Selamat sore Bunda! 🌇"
+                lower.contains("malam") -> "Selamat malam Bunda! 🌙"
+                lower.contains("assalam") -> "Wa'alaikumsalam warahmatullahi wabarakatuh Bunda sayang! 🤲"
+                else -> "Halo Bunda tersayang! Senang bertemu Bunda hari ini. 🌸"
+            }
+            return "$timeGreeting\n\n" +
+                "Kondisi kas keluarga saat ini:\n" +
+                "• Total Saldo Kas: ${CurrencyFormatter.formatRupiah(state.totalNetBalance)}\n" +
+                "• Belanja Hari Ini: ${CurrencyFormatter.formatRupiah(state.todayExpense)}\n\n" +
+                "Cici siap sedia membantu catat belanjaan, ralat harga, cek sisa kas, atau kasih tips hemat dapur. Ada yang bisa Cici bantu sekarang Bun?"
+        }
+
+        // 10. Gratitude & Empathy ("terima kasih", "kamu pintar", "capek belanja")
+        val gratitudeResponse = handleGratitudeAndEmpathy(lower)
+        if (gratitudeResponse != null) return gratitudeResponse
+
+        // 11. Dynamic Contextual Fallback (Context-rich, responsive, NEVER a static copy-paste template)
+        return "Halo Bunda! Cici menyimak: \"$prompt\".\n\n" +
+            "Sebagai asisten belanja keluarga Bunda, Cici siap membantu mencatat pengeluaran belanja, merawat amplop anggaran, atau mengecek saldo kas.\n\n" +
+            "• Sisa Kas Sekarang: ${CurrencyFormatter.formatRupiah(state.totalNetBalance)}\n" +
+            "• Pengeluaran Hari Ini: ${CurrencyFormatter.formatRupiah(state.todayExpense)}\n\n" +
+            "Bunda bisa langsung sebutkan belanjaan (misalnya: 'Beli telur 28rb sama tepung 10rb') atau tanyakan hal lain seputar kas keluarga ke Cici ya Bun!"
+    }
+
+    private fun isIdentityQuery(lower: String): Boolean {
+        return lower.contains("siapa namamu") || lower.contains("namamu siapa") ||
+            lower.contains("kamu siapa") || lower.contains("siapa kamu") ||
+            lower.contains("nama kamu") || lower.contains("nama anda") ||
+            lower.contains("cici siapa") || lower.contains("siapa cici") ||
+            lower.contains("cici itu siapa") || lower.contains("kenalan") ||
+            lower.contains("tentang kamu") || lower.contains("kamu itu siapa") ||
+            lower.contains("siapa yang buat kamu") || lower.contains("siapa penciptamu")
+    }
+
+    private fun isShoppingReadinessQuery(lower: String): Boolean {
+        return lower.contains("bantu aku belanja") || lower.contains("bantu belanja") ||
+            lower.contains("temani belanja") || lower.contains("teman belanja") ||
+            lower.contains("ayo kita belanja") || lower.contains("ayo belanja") ||
+            lower.contains("mau belanja") || lower.contains("lagi belanja") ||
+            lower.contains("sedang belanja") || lower.contains("di pasar") ||
+            lower.contains("di minimarket") || lower.contains("di supermarket") ||
+            lower.contains("belanja bareng") || lower.contains("pandu belanja") ||
+            lower.contains("siap belanja")
+    }
+
+    private fun isCapabilitiesQuery(lower: String): Boolean {
+        return lower.contains("kamu bisa apa") || lower.contains("bisa apa aja") ||
+            lower.contains("bisa apa saja") || lower.contains("apa yang bisa kamu lakukan") ||
+            lower.contains("fitur apa") || lower.contains("fitur cici") ||
+            lower.contains("cara pakai") || lower.contains("apa kegunaanmu") ||
+            lower.contains("kemampuan kamu") || lower.contains("bantuan") ||
+            lower.contains("panduan")
+    }
+
+    private fun isBorosQuery(lower: String): Boolean {
+        return lower.contains("paling boros") || lower.contains("pos mana yang paling boros") ||
+            lower.contains("kategori apa yang paling banyak") || lower.contains("pengeluaran terbesar") ||
+            lower.contains("boros di mana") || lower.contains("paling banyak keluar")
+    }
+
+    private fun isTodayRecapQuery(lower: String): Boolean {
+        return lower.contains("rekap belanja hari ini") || lower.contains("rekap hari ini") ||
+            lower.contains("tadi belanja apa aja") || lower.contains("tadi beli apa aja") ||
+            lower.contains("pengeluaran hari ini") || lower.contains("catatan hari ini") ||
+            lower.contains("belanjaan hari ini")
+    }
+
+    private fun isUnpaidBillsQuery(lower: String): Boolean {
+        return lower.contains("tagihan belum dibayar") || lower.contains("cek tagihan") ||
+            lower.contains("tagihan apa aja") || lower.contains("tagihan bulan ini") ||
+            lower.contains("belum lunas")
+    }
+
+    private fun isFinancialHealthQuery(lower: String): Boolean {
+        return lower.contains("kondisi keuangan") || lower.contains("keuangan kita") ||
+            lower.contains("apakah uangku cukup") || lower.contains("uang cukup") ||
+            lower.contains("apakah kita boros") || lower.contains("evaluasi keuangan") ||
+            lower.contains("status keuangan") || lower.contains("analisis anggaran") ||
+            lower.contains("analisis keuangan") || lower.contains("gimana keuangan") ||
+            lower.contains("keuangan bulan ini")
+    }
+
+    private fun isGreetingQuery(lower: String): Boolean {
+        return lower == "halo" || lower == "hai" || lower == "hei" ||
+            lower.startsWith("halo ") || lower.startsWith("hai ") ||
+            lower.contains("pagi") || lower.contains("siang") ||
+            lower.contains("sore") || lower.contains("malam") ||
+            lower.contains("assalam")
+    }
+
+    private fun handleGratitudeAndEmpathy(lower: String): String? {
+        if (lower.contains("makasih") || lower.contains("terima kasih") || lower.contains("tengkyu") || lower.contains("matur nuwun") || lower.contains("nuhun")) {
+            return "Sama-sama Bunda tersayang! Senang sekali Cici bisa mendampingi dan meringankan urusan rumah tangga Bunda. Sehat, berkah, dan bahagia selalu untuk Bunda dan keluarga tercinta! ❤️🌸"
+        }
+        if (lower.contains("kamu pintar") || lower.contains("cici pintar") || lower.contains("hebat") || lower.contains("keren") || lower.contains("mantap") || lower.contains("bagus")) {
+            return "Alhamdulillah, terima kasih banyak apresiasinya Bunda! Pujian Bunda bikin Cici makin semangat mendampingi belanja keluarga. Semua berkat ketelitian Bunda juga lho! 🥰"
+        }
+        if (lower.contains("capek") || lower.contains("lelah") || lower.contains("pusing") || lower.contains("mumet")) {
+            return "Peluk hangat untuk Bunda! Belanja dan mengurus kebutuhan rumah memang menguras tenaga. Istirahat sejenak yuk Bun, minum teh hangat atau air putih dulu. Bunda sudah melakukan yang terbaik hari ini! Catatan belanjaan biar Cici yang rapikan ya."
+        }
+        if (lower.contains("siapa penciptamu") || lower.contains("dibuat oleh siapa") || lower.contains("siapa yang buat kamu")) {
+            return "Cici dikembangkan khusus untuk aplikasi ArAr Cicis sebagai asisten cerdas bagi ibu rumah tangga dan keluarga Indonesia, agar pengelolaan kas belanja selalu rapi, hemat, dan bebas dari halusinasi hitung!"
+        }
+        return null
+    }
+
+    private fun evaluateArithmeticQuery(prompt: String, lower: String): String? {
+        val hasMathWords = lower.contains("tambah") || lower.contains("ditambah") ||
+            lower.contains("kurang") || lower.contains("dikurang") ||
+            lower.contains("kali") || lower.contains("dikali") ||
+            lower.contains("dibagi") || lower.contains("bagi") ||
+            lower.contains("+") || lower.contains("-") || lower.contains("*") || lower.contains("/")
+
+        if (!hasMathWords) return null
+
+        var mathExpr = lower
+            .replace("ditambah", "+")
+            .replace("tambah", "+")
+            .replace("dikurang", "-")
+            .replace("kurang", "-")
+            .replace("dikali", "*")
+            .replace("kali", "*")
+            .replace("dibagi", "/")
+            .replace("bagi", "/")
+            .replace("goceng", "5000")
+            .replace("ceban", "10000")
+            .replace("gocap", "50000")
+            .replace("seceng", "1000")
+            .replace("noban", "20000")
+            .replace("pego", "150000")
+            .replace("cepek", "100000")
+
+        val regexK = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:ribu|rb|rebu|k(?![a-zA-Z]))", Pattern.CASE_INSENSITIVE)
+        val matcherK = regexK.matcher(mathExpr)
+        val sb = StringBuffer()
+        while (matcherK.find()) {
+            val numStr = matcherK.group(1)?.replace(",", ".") ?: "0"
+            val floatVal = numStr.toDoubleOrNull() ?: 0.0
+            matcherK.appendReplacement(sb, (floatVal * 1000).toLong().toString())
+        }
+        matcherK.appendTail(sb)
+        mathExpr = sb.toString()
+
+        val cleanMathChars = mathExpr.filter { it.isDigit() || it == '+' || it == '-' || it == '*' || it == '/' || it == '.' || it == ' ' }
+        if (!MathExpressionEvaluator.isCompoundExpression(cleanMathChars)) return null
+
+        val calcResult = MathExpressionEvaluator.evaluateMathExpression(cleanMathChars)
+        if (calcResult <= 0L) return null
+
+        return "Hasil hitungannya: $prompt = ${CurrencyFormatter.formatRupiah(calcResult)} ya Bun. Mau sekalian Cici catat ke pengeluaran kas?"
     }
 }

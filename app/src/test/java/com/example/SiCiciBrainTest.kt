@@ -120,4 +120,37 @@ class SiCiciBrainTest {
         val gemma = models.find { it.family == SlmFamily.GEMMA }
         assertNotNull(gemma)
     }
+
+    @Test
+    fun testIdentityQuestionProducesWarmIntroductionNotCannedTemplate() {
+        val state = DashboardUiState(totalNetBalance = 2_450_000L)
+        val response = GemmaCiciBrain.processOfflineNlp("siapa namamu?", state)
+
+        assertTrue("Should contain Cici's name", response.replyText.contains("Cici", ignoreCase = true))
+        assertTrue("Should mention ArAr Cicis", response.replyText.contains("ArAr Cicis", ignoreCase = true))
+        assertTrue("Should mention balance", response.replyText.contains("Rp") || response.replyText.contains("2.450.000"))
+        // Must NOT be the canned help template
+        assertTrue("Must NOT be the repetitive canned example", !response.replyText.contains("Contoh perintah yang bisa Bunda sebutkan"))
+    }
+
+    @Test
+    fun testShoppingReadinessQuestionGuidesBunda() {
+        val state = DashboardUiState(
+            totalNetBalance = 1_200_000L,
+            todayExpense = 45_000L
+        )
+        val response = GemmaCiciBrain.processOfflineNlp("bantu aku belanja ya", state)
+
+        assertTrue("Should accept with enthusiasm", response.replyText.contains("Cici", ignoreCase = true))
+        assertTrue("Should mention balance or belanja", response.replyText.contains("belanja", ignoreCase = true))
+        assertTrue("Must NOT be the repetitive canned example", !response.replyText.contains("Contoh perintah yang bisa Bunda sebutkan"))
+    }
+
+    @Test
+    fun testArithmeticCalculationQuestion() {
+        val state = DashboardUiState(totalNetBalance = 1_000_000L)
+        val response = GemmaCiciBrain.processOfflineNlp("15rb tambah 35rb berapa?", state)
+
+        assertTrue("Should calculate 50.000", response.replyText.contains("50.000"))
+    }
 }
