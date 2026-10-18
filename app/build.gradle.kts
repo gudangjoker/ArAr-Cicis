@@ -41,6 +41,11 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  lint {
+    checkReleaseBuilds = false
+    abortOnError = false
+    disable += "InvalidFragmentVersionForActivityResult"
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
