@@ -92,6 +92,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.ai.model.ChatMessage
 import com.example.ai.model.DownloadStatus
+import com.example.ai.voice.CiciVoiceService
 import com.example.ai.voice.VoiceAssistantManager
 import com.example.ui.dialog.ModelDownloadDialog
 import com.example.ui.theme.EmeraldDark
@@ -128,7 +129,7 @@ fun SiCiciChatScreen(
                 inputPrompt = recognizedText
                 viewModel.askSiCici(recognizedText) { responseSpeech ->
                     if (viewModel.isTtsVoiceEnabled.value) {
-                        voiceManager.speak(responseSpeech)
+                        CiciVoiceService.speak(context.applicationContext, responseSpeech)
                     }
                 }
             }
